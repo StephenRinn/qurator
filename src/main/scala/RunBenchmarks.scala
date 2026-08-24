@@ -132,7 +132,11 @@ object RunBenchmarks extends IOApp.Simple {
                     val cuttingEffectiveWidthEnabled = true
                     val cuttingSmallCircuitNoCutFastPath = false
 
-                    def mkEnv(seed: Long) =
+                    def mkEnv(
+                        seed: Long,
+                        cuttingEnabled: Boolean = true,
+                        mergingEnabled: Boolean = true
+                    ) =
                         for {
                             registry <- BenchmarkDeviceRegistry.make(
                                 BenchmarkDeviceRegistry.defaultDevices,
@@ -159,6 +163,8 @@ object RunBenchmarks extends IOApp.Simple {
                                 additionalOptimizationRuns = (c: Circuit) => List(c),
                                 environment = cfg.environment,
                                 compiler = compiler,
+                                cuttingEnabled = cuttingEnabled,
+                                mergingEnabled = mergingEnabled,
                                 cuttingEffectiveWidthEnabled = cuttingEffectiveWidthEnabled
                             )
                         } yield (registry, clients, compiler, scheduler, cuttingStrategy)
@@ -181,29 +187,50 @@ object RunBenchmarks extends IOApp.Simple {
                                 )
                             )
 
-                        (reg2, cl2, co2, _, _) <- mkEnv(42L)
-                        leastBusy <- Logger[IO].info("Running Least Busy Baselines") *>
-                            SchedulerBenchmarkRunner.runBaseline(
-                                SchedulerBenchmarkRunner.BaselinePolicy.LeastBusy,
-                                specs,
-                                reg2,
-                                cl2,
-                                co2
-                            )
+                        (regNoCut, clNoCut, coNoCut, schNoCut, cuttingNoCut) <-
+                            mkEnv(42L, cuttingEnabled = false, mergingEnabled = false)
+                        noCutNoMergeRun <-
+                            Logger[IO].info("Running Scheduler Benchmark Without Circuit Cutting Or Merging") *>
+                                schNoCut.startRuntime.use(_ =>
+                                    SchedulerBenchmarkRunner.runSchedulerBenchmark(
+                                        schNoCut,
+                                        specs,
+                                        regNoCut,
+                                        clNoCut,
+                                        cuttingNoCut,
+                                        coNoCut,
+                                        cuttingEnabled = false,
+                                        cuttingEffectiveWidthEnabled = cuttingEffectiveWidthEnabled,
+                                        policyName = "scheduler_no_cutting_no_merging"
+                                    )
+                                )
 
-                        (reg3, cl3, co3, _, _) <- mkEnv(42L)
-                        hiFid <- Logger[IO].info("Running Highest Fidelity Benchmarks") *>
-                            SchedulerBenchmarkRunner.runBaseline(
-                                SchedulerBenchmarkRunner.BaselinePolicy.HighestFidelity,
-                                specs,
-                                reg3,
-                                cl3,
-                                co3
-                            )
+                        baselinePolicies = List(
+                            SchedulerBenchmarkRunner.BaselinePolicy.LeastBusy,
+                            SchedulerBenchmarkRunner.BaselinePolicy.HighestFidelity,
+                            SchedulerBenchmarkRunner.BaselinePolicy.ShortestQueueTargetFidelity(0.3),
+                            SchedulerBenchmarkRunner.BaselinePolicy.QuantumListScheduling,
+                            SchedulerBenchmarkRunner.BaselinePolicy.FairShare
+                        )
+                        baselineRuns <- baselinePolicies.traverse { policy =>
+                            for {
+                                (registry, clients, compiler, _, _) <- mkEnv(42L)
+                                run <- Logger[IO].info(s"Running ${policy.name} benchmark") *>
+                                    SchedulerBenchmarkRunner.runBaseline(
+                                        policy,
+                                        specs,
+                                        registry,
+                                        clients,
+                                        compiler
+                                    )
+                            } yield run
+                        }
 
                          _ <- IO.println(s"Scheduler: q/s=${schedRun.throughputQuantumPerSec}, meanQ=${schedRun.meanQueueWaitMillis}, meanLogF=${schedRun.meanPredictedLogFidelity}, pos_arith=${schedRun.meanPredictedSuccessProbability}, pos_geo=${schedRun.geometricMeanPredictedSuccessProbability}, n=${schedRun.uniqueSubmittedJobs}")
-                         _ <- IO.println(s"LeastBusy: q/s=${leastBusy.throughputQuantumPerSec}, meanQ=${leastBusy.meanQueueWaitMillis}, meanLogF=${leastBusy.meanPredictedLogFidelity}, pos_arith=${leastBusy.meanPredictedSuccessProbability}, pos_geo=${leastBusy.geometricMeanPredictedSuccessProbability}")
-                         _ <- IO.println(s"HighestF: q/s=${hiFid.throughputQuantumPerSec}, meanQ=${hiFid.meanQueueWaitMillis}, meanLogF=${hiFid.meanPredictedLogFidelity}, , pos_arith=${hiFid.meanPredictedSuccessProbability}, pos_geo=${hiFid.geometricMeanPredictedSuccessProbability}")
+                         _ <- IO.println(s"SchedulerNoCutNoMerge: q/s=${noCutNoMergeRun.throughputQuantumPerSec}, meanQ=${noCutNoMergeRun.meanQueueWaitMillis}, meanLogF=${noCutNoMergeRun.meanPredictedLogFidelity}, pos_arith=${noCutNoMergeRun.meanPredictedSuccessProbability}, pos_geo=${noCutNoMergeRun.geometricMeanPredictedSuccessProbability}, n=${noCutNoMergeRun.uniqueSubmittedJobs}")
+                         _ <- baselineRuns.traverse_ { run =>
+                            IO.println(s"${run.policyName}: q/s=${run.throughputQuantumPerSec}, meanQ=${run.meanQueueWaitMillis}, meanLogF=${run.meanPredictedLogFidelity}, pos_arith=${run.meanPredictedSuccessProbability}, pos_geo=${run.geometricMeanPredictedSuccessProbability}")
+                         }
                     } yield ()
                 }.useForever
             }

@@ -31,6 +31,7 @@ import qurator.domain.{ProviderJobTiming, ProviderTaskStatus, QuantumJobResult, 
 import fs2.io.file.Path
 import qurator.domain.cutting.CuttingRequest
 import qurator.util.CuttingStrategies.CuttingStrategy
+import qurator.util.FidelityEstimator
 
 
 final case class QuantumTaskSpec(
@@ -744,6 +745,121 @@ object SchedulerBenchmarkRunner {
         case object HighestFidelity extends BaselinePolicy {
             val name = "highest_fidelity"
         }
+        /** Pick the shortest projected device queue among devices meeting the fidelity SLO. */
+        final case class ShortestQueueTargetFidelity(
+            targetEstimatedFidelity: Double = 0.9
+        ) extends BaselinePolicy {
+            require(
+                targetEstimatedFidelity >= 0.0 &&
+                    targetEstimatedFidelity <= 1.0 &&
+                    targetEstimatedFidelity.isFinite,
+                s"targetEstimatedFidelity must be finite and in [0, 1], got $targetEstimatedFidelity"
+            )
+
+            val name = "shortest_queue_target_fidelity"
+        }
+        /** Greedy heterogeneous-machine list scheduling using compiled, calibration-aware runtimes. */
+        case object QuantumListScheduling extends BaselinePolicy {
+            val name = "quantum_list_scheduling"
+        }
+        /** Equalize predicted QPU-time consumption, then break ties by finish time and fidelity. */
+        case object FairShare extends BaselinePolicy {
+            val name = "fair_share"
+        }
+    }
+
+    private[qurator] final case class BaselineCandidate(
+        device: Device,
+        queueWaitMillis: Long,
+        runMillis: Long,
+        predictedLogFidelity: Double,
+        predictedSuccessProbability: Double
+    )
+
+    private[qurator] final case class BaselinePlanningState(
+        projectedRuntimeMillisByDevice: Map[String, Long] = Map.empty,
+        fairShareUsageMillisByDevice: Map[String, Long] = Map.empty
+    )
+
+    private[qurator] def selectBaselineCandidate(
+        policy: BaselinePolicy,
+        candidates: List[BaselineCandidate],
+        state: BaselinePlanningState
+    ): Either[String, BaselineCandidate] = {
+        def projectedQueue(c: BaselineCandidate): Long =
+            c.queueWaitMillis +
+                state.projectedRuntimeMillisByDevice.getOrElse(c.device.platformId, 0L)
+
+        def stableQueueKey(c: BaselineCandidate): (Long, Double, String) =
+            (projectedQueue(c), -c.predictedSuccessProbability, c.device.platformId)
+
+        def projectedFinish(c: BaselineCandidate): Long =
+            projectedQueue(c) + c.runMillis
+
+        val selected =
+            policy match {
+                case BaselinePolicy.LeastBusy =>
+                    candidates.minByOption(stableQueueKey)
+
+                case BaselinePolicy.HighestFidelity =>
+                    candidates.minByOption(c =>
+                        (-c.predictedSuccessProbability, c.queueWaitMillis, c.device.platformId)
+                    )
+
+                case p: BaselinePolicy.ShortestQueueTargetFidelity =>
+                    candidates
+                        .filter(_.predictedSuccessProbability >= p.targetEstimatedFidelity)
+                        .minByOption(stableQueueKey)
+
+                case BaselinePolicy.QuantumListScheduling =>
+                    candidates.minByOption(c =>
+                        (
+                            projectedFinish(c),
+                            -c.predictedSuccessProbability,
+                            c.queueWaitMillis,
+                            c.device.platformId
+                        )
+                    )
+
+                case BaselinePolicy.FairShare =>
+                    candidates.minByOption(c =>
+                        (
+                            state.fairShareUsageMillisByDevice.getOrElse(c.device.platformId, 0L),
+                            projectedFinish(c),
+                            -c.predictedSuccessProbability,
+                            c.device.platformId
+                        )
+                    )
+            }
+
+        selected.toRight {
+            policy match {
+                case p: BaselinePolicy.ShortestQueueTargetFidelity =>
+                    s"No qubit-compatible device satisfies target fidelity ${p.targetEstimatedFidelity}"
+                case _ =>
+                    "No qubit-compatible device is available for task"
+            }
+        }
+    }
+
+    private[qurator] def advanceBaselinePlanningState(
+        state: BaselinePlanningState,
+        selected: BaselineCandidate
+    ): BaselinePlanningState = {
+        val deviceId = selected.device.platformId
+
+        state.copy(
+            projectedRuntimeMillisByDevice =
+                state.projectedRuntimeMillisByDevice.updated(
+                    deviceId,
+                    state.projectedRuntimeMillisByDevice.getOrElse(deviceId, 0L) + selected.runMillis
+                ),
+            fairShareUsageMillisByDevice =
+                state.fairShareUsageMillisByDevice.updated(
+                    deviceId,
+                    state.fairShareUsageMillisByDevice.getOrElse(deviceId, 0L) + selected.runMillis
+                )
+        )
     }
 
     private def monotonicMillis: IO[Long] =
@@ -755,40 +871,45 @@ object SchedulerBenchmarkRunner {
         compiler: FakeCompiler[IO],
         targetEstimatedFidelity: Double,
         cuttingStrategy: CuttingStrategy[IO],
+        cuttingEnabled: Boolean,
         cuttingEffectiveWidthEnabled: Boolean,
         additionalOptimizationRuns: Circuit => List[Circuit]
     ): IO[List[QuantumTaskSpec]] =
         for {
             devices <- Scheduler.getAvailableDevices[IO](clients)
-
-            feasibleNoCut <- devices
-                .filter(_.qubits >= spec.qubits.value)
-                .traverse(d => Scheduler.estimateFidelity[IO](d, spec.circuit, clients, compiler))
-                .map(_.exists(_.pTotal > targetEstimatedFidelity))
-
             expanded <-
-                if (feasibleNoCut) {
+                if (!cuttingEnabled) {
                     List(spec).pure[IO]
                 } else {
-                    cuttingStrategy(
-                        CuttingRequest(
-                            circuit = spec.circuit,
-                            devices = devices,
-                            targetEstimatedFidelity = targetEstimatedFidelity,
-                            shots = Some(spec.shots.value.toLong),
-                            effectiveWidthEnabled = cuttingEffectiveWidthEnabled
-                        )
-                    ).map { decision =>
-                        val cut = decision.selected.subcircuits
-                        cut.flatMap(additionalOptimizationRuns).map { c =>
-                            QuantumTaskSpec(
-                                circuit = c,
-                                qubits  = TaskQubits(c.qubits),
-                                shots   = spec.shots,
-                                depth   = spec.depth
-                            )
+                    devices
+                        .filter(_.qubits >= spec.qubits.value)
+                        .traverse(d => Scheduler.estimateFidelity[IO](d, spec.circuit, clients, compiler))
+                        .map(_.exists(_.pTotal > targetEstimatedFidelity))
+                        .flatMap { feasibleNoCut =>
+                            if (feasibleNoCut) {
+                                List(spec).pure[IO]
+                            } else {
+                                cuttingStrategy(
+                                    CuttingRequest(
+                                        circuit = spec.circuit,
+                                        devices = devices,
+                                        targetEstimatedFidelity = targetEstimatedFidelity,
+                                        shots = Some(spec.shots.value.toLong),
+                                        effectiveWidthEnabled = cuttingEffectiveWidthEnabled
+                                    )
+                                ).map { decision =>
+                                    val cut = decision.selected.subcircuits
+                                    cut.flatMap(additionalOptimizationRuns).map { c =>
+                                        QuantumTaskSpec(
+                                            circuit = c,
+                                            qubits  = TaskQubits(c.qubits),
+                                            shots   = spec.shots,
+                                            depth   = spec.depth
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    }
                 }
         } yield expanded
 
@@ -799,6 +920,7 @@ object SchedulerBenchmarkRunner {
         compiler: FakeCompiler[IO],
         targetEstimatedFidelity: Double,
         cuttingStrategy: CuttingStrategy[IO],
+        cuttingEnabled: Boolean,
         cuttingEffectiveWidthEnabled: Boolean,
         additionalOptimizationRuns: Circuit => List[Circuit],
         onQuantumComplete: QuantumResult => IO[Unit]
@@ -821,6 +943,7 @@ object SchedulerBenchmarkRunner {
                 compiler,
                 targetEstimatedFidelity,
                 cuttingStrategy,
+                cuttingEnabled,
                 cuttingEffectiveWidthEnabled,
                 additionalOptimizationRuns
             )
@@ -937,7 +1060,9 @@ object SchedulerBenchmarkRunner {
         clients: HttpClients[IO],
         cuttingStrategy: CuttingStrategy[IO],
         compiler: FakeCompiler[IO],
+        cuttingEnabled: Boolean = true,
         cuttingEffectiveWidthEnabled: Boolean = true,
+        policyName: String = "scheduler",
         pollEvery: scala.concurrent.duration.FiniteDuration = scala.concurrent.duration.DurationInt(100).millis
     ): IO[BenchmarkRun] = {
         for{
@@ -951,7 +1076,20 @@ object SchedulerBenchmarkRunner {
                     case Some(taskId) => completedQuantumRef.update(_ + (taskId -> result))
                     case None         => IO.raiseError(new RuntimeException(s"Missing taskId in quantum result for job=${result.jobId}"))
                 }
-            quantumIdPairs <- specs.traverse(submitOneWorkItem(scheduler, _, clients, compiler, 0.9, cuttingStrategy, cuttingEffectiveWidthEnabled, (c: Circuit) => List(c), onQuantumComplete)).map(_.flatten)
+            quantumIdPairs <- specs.traverse(
+                submitOneWorkItem(
+                    scheduler,
+                    _,
+                    clients,
+                    compiler,
+                    0.9,
+                    cuttingStrategy,
+                    cuttingEnabled,
+                    cuttingEffectiveWidthEnabled,
+                    (c: Circuit) => List(c),
+                    onQuantumComplete
+                )
+            ).map(_.flatten)
             expectedIds = quantumIdPairs.map(_._1).toSet
             completions <- waitUntilAllCompleted(completedQuantumRef, expectedIds, pollEvery)
             t1 <- monotonicMillis
@@ -962,40 +1100,81 @@ object SchedulerBenchmarkRunner {
                 compiler
             )
         } yield BenchmarkRun(
-            policyName = "scheduler",
+            policyName = policyName,
             selectedQuantumTasks = expectedIds.size,
             schedulingWallMillis = t1 - t0,
             quantumMetrics = metrics
         )
     }
 
-    private def chooseLeastBusyDevice(
-        task: QuantumTaskSpec,
-        clients: HttpClients[IO]
-    ): IO[Device] =
-    Scheduler.getAvailableDevices[IO](clients).flatMap { devices =>
-        val feasible = devices.filter(_.qubits >= task.qubits.value)
-        if (feasible.isEmpty)
-        IO.raiseError(new RuntimeException("No feasible device for task"))
-        else
-        IO.pure(feasible.minBy(_.queueLength))
-    }
-
-    private def chooseHighestFidelityDevice(
+    private def candidatesForBaseline(
         task: QuantumTaskSpec,
         registry: BenchmarkDeviceRegistry,
         clients: HttpClients[IO],
         compiler: FakeCompiler[IO]
-    ): IO[Device] = {
-        val feasible = registry.devices.filter(_.qubits >= task.qubits.value)
-        if (feasible.isEmpty) {
-        new RuntimeException(s"No feasible device for task").raiseError[IO, Device]
-        } else {
-            feasible
-                .traverse(d => Scheduler.estimateFidelity[IO](d, task.circuit, clients, compiler).map(est => (est.logPTotal, d)))
-                .map(_.maxBy(_._1)._2)
+    ): IO[List[BaselineCandidate]] =
+        Scheduler.getAvailableDevices[IO](clients).flatMap { devices =>
+            devices
+                .filter(_.qubits >= task.qubits.value)
+                .sortBy(_.platformId)
+                .traverse { device =>
+                    for {
+                        compiled <- compiler.compileCircuitFor(device, task.circuit)
+                        rawCalibration <- registry.calibrationsById
+                            .get(device.platformId)
+                            .liftTo[IO](
+                                new RuntimeException(
+                                    s"Missing benchmark calibration for device=${device.platformId}"
+                                )
+                            )
+                        calibration = FidelityEstimator.normalizeCalibration(rawCalibration)
+                        estimate = FidelityEstimator.score(compiled, calibration)
+                        queueWaitMillis <- registry.fakeDevicesById
+                            .get(device.platformId)
+                            .fold(device.queueLength.toLong.pure[IO])(_.estimatedCurrentQueueWaitMillis)
+                        singleShotDurationNs =
+                            compiled.remainingGates.foldLeft(0.0) { (total, gate) =>
+                                total + calibration.durationNsFor(gate).toDouble
+                            }
+                        executionMillis =
+                            math.ceil(
+                                singleShotDurationNs * math.max(1, task.shots.value).toDouble / 1000000.0
+                            ).toLong
+                        runMillis = 3000L + math.max(0L, executionMillis)
+                    } yield BaselineCandidate(
+                        device = device,
+                        queueWaitMillis = math.max(0L, queueWaitMillis),
+                        runMillis = runMillis,
+                        predictedLogFidelity = estimate.logPTotal,
+                        predictedSuccessProbability = estimate.pTotal
+                    )
+                }
         }
-    }
+
+    private def planBaseline(
+        policy: BaselinePolicy,
+        quantumTasks: List[QuantumTaskSpec],
+        registry: BenchmarkDeviceRegistry,
+        clients: HttpClients[IO],
+        compiler: FakeCompiler[IO]
+    ): IO[List[(QuantumTaskSpec, BaselineCandidate)]] =
+        quantumTasks
+            .foldLeftM(
+                (List.empty[(QuantumTaskSpec, BaselineCandidate)], BaselinePlanningState())
+            ) { case ((assignments, state), spec) =>
+                candidatesForBaseline(spec, registry, clients, compiler).flatMap { candidates =>
+                    selectBaselineCandidate(policy, candidates, state)
+                        .leftMap(new RuntimeException(_))
+                        .liftTo[IO]
+                        .map { selected =>
+                            (
+                                (spec -> selected) :: assignments,
+                                advanceBaselinePlanningState(state, selected)
+                            )
+                        }
+                }
+            }
+            .map(_._1.reverse)
 
     def runBaseline(
         policy: BaselinePolicy,
@@ -1006,17 +1185,11 @@ object SchedulerBenchmarkRunner {
     ): IO[BenchmarkRun] =
         for {
             t0 <- monotonicMillis
-            metrics <- quantumTasks.traverse { spec =>
+            assignments <- planBaseline(policy, quantumTasks, registry, clients, compiler)
+            metrics <- assignments.traverse { case (_, selected) =>
                 for {
                     logicalTaskId <- ID.make[IO, TaskId]
-
-                    device <- policy match {
-                        case BaselinePolicy.LeastBusy =>
-                            chooseLeastBusyDevice(spec, clients)
-
-                        case BaselinePolicy.HighestFidelity =>
-                            chooseHighestFidelityDevice(spec, registry, clients, compiler)
-                    }
+                    device = selected.device
                     _ <- Logger[IO].info(s"Baseline Device: ${device.platformId}")
 
                     jobId <- IO.delay(s"baseline-${java.util.UUID.randomUUID().toString}")
@@ -1026,20 +1199,13 @@ object SchedulerBenchmarkRunner {
                         deviceId = device.platformId
                     )
 
-                    est <- Scheduler.estimateFidelity[IO](
-                        device,
-                        spec.circuit,
-                        clients,
-                        compiler
-                    )
-
                 } yield QuantumTaskMetric(
                     taskId = logicalTaskId,
                     jobId = jobId,
                     deviceId = device.platformId,
                     queueWaitMillis = rec.queueWaitMillis,
-                    predictedLogFidelity = est.logPTotal,
-                    predictedSuccessProbability = est.pTotal
+                    predictedLogFidelity = selected.predictedLogFidelity,
+                    predictedSuccessProbability = selected.predictedSuccessProbability
                 )
             }
             t1 <- monotonicMillis

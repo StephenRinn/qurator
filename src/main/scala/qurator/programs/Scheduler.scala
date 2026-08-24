@@ -112,6 +112,7 @@ object Scheduler{
         environment: AppEnvironment = AppEnvironment.Development,
         compiler: FakeCompiler[F], //abstract this
         cuttingEnabled: Boolean = true,
+        mergingEnabled: Boolean = true,
         cuttingEffectiveWidthEnabled: Boolean = true,
         batchSubmissionsEnabled: Boolean = true
   ): F[Scheduler[F]] =
@@ -136,7 +137,7 @@ object Scheduler{
             SchedulerDashboard.dashboardUrl(dashboardConfig)
 
         private val idleDelay: FiniteDuration = 250.millis
-        private val mergeEnabled: Boolean = true
+        private val mergeEnabled: Boolean = mergingEnabled
         private val mergeMaxQubits: Int = 10
         private val mergeQueueFactorMillis: Long = 3000L
         private val productionMode: Boolean = environment.isProduction
