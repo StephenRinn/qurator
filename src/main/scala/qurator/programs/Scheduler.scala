@@ -101,6 +101,52 @@ object Scheduler{
       cause
   )
 
+  private def shiftGate(gate: Gate, offset: Int): Gate = {
+    def shift(q: Int): Int = q + offset
+
+    gate match {
+      case X(q)                         => X(shift(q))
+      case Y(q)                         => Y(shift(q))
+      case Z(q)                         => Z(shift(q))
+      case H(q)                         => H(shift(q))
+      case S(q)                         => S(shift(q))
+      case SDG(q)                       => SDG(shift(q))
+      case T(q)                         => T(shift(q))
+      case TDG(q)                       => TDG(shift(q))
+      case SX(q)                        => SX(shift(q))
+      case SXDG(q)                      => SXDG(shift(q))
+      case Id(q)                        => Id(shift(q))
+      case Phase(theta, q)              => Phase(theta, shift(q))
+      case RX(theta, q)                 => RX(theta, shift(q))
+      case RY(theta, q)                 => RY(theta, shift(q))
+      case RZ(theta, q)                 => RZ(theta, shift(q))
+      case U(theta, phi, lambda, q)     => U(theta, phi, lambda, shift(q))
+      case U2(phi, lambda, q)           => U2(phi, lambda, shift(q))
+      case U3(theta, phi, lambda, q)    => U3(theta, phi, lambda, shift(q))
+      case CX(ctrl, target)             => CX(shift(ctrl), shift(target))
+      case CY(ctrl, target)             => CY(shift(ctrl), shift(target))
+      case CZ(ctrl, target)             => CZ(shift(ctrl), shift(target))
+      case CH(ctrl, target)             => CH(shift(ctrl), shift(target))
+      case Swap(q1, q2)                 => Swap(shift(q1), shift(q2))
+      case CP(ctrl, theta, target)       => CP(shift(ctrl), theta, shift(target))
+      case CRX(ctrl, theta, target)      => CRX(shift(ctrl), theta, shift(target))
+      case CRY(ctrl, theta, target)      => CRY(shift(ctrl), theta, shift(target))
+      case CRZ(ctrl, theta, target)      => CRZ(shift(ctrl), theta, shift(target))
+      case CU(ctrl, t, p, l, target)     => CU(shift(ctrl), t, p, l, shift(target))
+      case CCX(ctrl1, ctrl2, target)     => CCX(shift(ctrl1), shift(ctrl2), shift(target))
+      case Measure(q)                    => Measure(shift(q))
+      case Reset(q)                      => Reset(shift(q))
+      case GPhase(theta)                 => GPhase(theta)
+      case NamedGate(name, params, qs)   => NamedGate(name, params, qs.map(shift))
+    }
+  }
+
+  private[qurator] def mergeCircuits(circuits: List[Circuit]): Circuit =
+    circuits.foldLeft(Circuit(List.empty[Gate], 0)) { (merged, circuit) =>
+      val shiftedGates = circuit.remainingGates.map(shiftGate(_, merged.qubits))
+      Circuit(merged.remainingGates ++ shiftedGates, merged.qubits + circuit.qubits)
+    }
+
   def make[F[_]: GenUUID: Concurrent: Logger : Temporal : Background : Async](
         dataPersistanceService: DataPersistanceService[F],
         clients: HttpClients[F],
@@ -249,7 +295,7 @@ object Scheduler{
         private def submitNewTaskRequest(
             taskReq: NewQuantumTaskRequest,
             onComplete: QuantumResult => F[Unit]
-        ): F[List[TaskId]] =  // TST
+        ): F[List[TaskId]] =  
              for{
                 devices <- Scheduler.getAvailableDevices[F](clients)
                 needsToBeCut <- requiresCutting(taskReq, devices)
@@ -339,7 +385,7 @@ object Scheduler{
         private def submitSynronizedTaskRequest(
             str: SynronizedQuantumTaskRequest,
             onComplete: List[QuantumResult] => F[Unit]
-        ): F[List[TaskId]] =  // TST
+        ): F[List[TaskId]] =  
             for{
                 devices <- Scheduler.getAvailableDevices[F](clients)
                 cutTasks <- 
@@ -544,8 +590,6 @@ object Scheduler{
                         best = bestQuantumDeviceScore(scored)
                         _ <- Logger[F].info(s"Picked Device Coefficient: $best")
                         bestDevice = best.device
-
-                        // compiled <- ???
 
                         submittedAt <- nowUtcLocalDateTime
                         _ <- submitSelectedQuantumTasks(bestDevice, task, submittedAt, devices, blacklistedDevices).attempt.flatMap {
@@ -841,8 +885,7 @@ object Scheduler{
                 )
                 _ <- Logger[F].info(s"Built Sync Plan. Plan Length: ${plan.assignments.toList.length}")
                 _ <- plan.assignments.toList.traverse_{case (device, tasksOnDevice) => 
-                  tasksOnDevice.traverse_{t => 
-                    //submitJobWithFallback(device, t, candidateDevicesByTask.getOrElse(t, Nil))  
+                  tasksOnDevice.traverse_{t =>  
                     nowUtcLocalDateTime.flatMap { submittedAt =>
                     submitQuantumToProvider(device, t, t.circuit).flatMap { jobId =>
                         Logger[F].info(s"Task ${t.uuid} submitted, adding to list") *>
@@ -943,7 +986,6 @@ object Scheduler{
                 }
             } yield ()
 
-        //TODO On Failure of job this needs to reschedule 
         private def fetchResultsFromCorrespondingProvider(
             provider: String,
             providerId: String,
@@ -1404,7 +1446,7 @@ object Scheduler{
                     .filter(_.qubits >= task.qubits.value)
                     .traverse(d => Scheduler.estimateFidelity(d, task.circuit, clients, compiler))
                     .map(lf => {
-                        val x = lf.filter(_.pTotal > targetEstimatedFidelity)   //_.logPTotal > math.log(targetEstimatedFidelity))
+                        val x = lf.filter(_.pTotal > targetEstimatedFidelity)   
                         println(s"========== HERE: ${math.log(targetEstimatedFidelity)} ========") 
                         println(x.mkString(", "))
                         x.isEmpty
@@ -1624,7 +1666,7 @@ object Scheduler{
             def meanField(f: DeviceQueueInformation => Option[Int], weighted: List[(DeviceQueueInformation, Double)]): Option[Long] = {
                 val pairs = weighted.flatMap { case (x, w) => f(x).map(v => (v.toLong, w)) }
                 weightedMean(pairs)
-            } //not using for now 
+            } 
 
 
             for{
@@ -1649,11 +1691,8 @@ object Scheduler{
             }yield queueMean
         }
 
-        // not used
         private def estimateTranspilationTime(circuit: Circuit, targetGateSet: List[Gate]) : F[Long] = 
             (circuit.remainingGates.length / 1000000L).pure[F] 
-            // This is very dumb and will likely get removed. 
-            // We need to transpile to decide on other factors anyway so accounting for potential transpilation not needed
 
         private def enqueueReady(newTasks: List[Task]): F[Unit] =
             readyTasks.update(ts => prioritizationStrategy(newTasks ++ ts))
@@ -1852,27 +1891,6 @@ object Scheduler{
             } 
         }
 
-            private def mergeCircuits(circuits: List[Circuit]): Circuit = circuits.foldLeft(Circuit(List.empty[Gate], 0)){(acc, b) => {
-                val offset = acc.qubits
-                val shiftedGates = b.remainingGates.map{
-                    case X(q) => X(q + offset)
-                    case H(ctrl) => H(ctrl + offset)
-                    case CX(ctrl, target) => CX(ctrl + offset, target + offset)
-                    case CCX(ctrl1, ctrl2, target) => CCX(ctrl1 + offset, ctrl2 + offset, target + offset)
-                    case CZ(ctrl, target) => CZ(ctrl + offset, target + offset)
-                    case U(theta, phi, lambda, q) => U(theta, phi, lambda, q + offset)
-                    case CU(ctrl, theta, phi, lambda, target) => CU(ctrl + offset, theta, phi, lambda, target + offset)
-                    case Swap(q1, q2) => Swap(q1 + offset, q2 + offset)
-                    case CRZ(ctrl, thetaDenom, q) => CRZ(ctrl + offset, thetaDenom, q + offset)
-                    case RZ(thetaDenom, q) => RZ(thetaDenom, q + offset)
-                    case RY(theta, q) => RY(theta, q + offset)
-                    case RX(theta, q) => RX(theta, q + offset)
-                    case SX(q) => SX(q + offset)
-                    case Measure(q) => Measure(q + offset)
-                }
-                Circuit(acc.remainingGates ++ shiftedGates, acc.qubits + b.qubits) //TODO Update this to merge gates based on slices 
-            }}  
-
             private[qurator] def estimateFidelity[F[_]: MonadThrow](
                 device: Device, 
                 task: Circuit, 
@@ -1884,10 +1902,6 @@ object Scheduler{
                     cal = FidelityEstimator.normalizeCalibration(deviceCal)
                     est = FidelityEstimator.score(compiled, cal)
                 } yield est
-
-            // Circuit Depth, Avg. CX error over the circuit, Avg CX in the circuit critical path, readout errors on the measured qubits. 
-            //The model is built as a product of linear terms: Fn =
-            //Π(ai + bi ∗ xi), where Fn is the fidelity of job n, xi is the feature and ai and bi are the tuned coefficient ??
 
             private def fetchDeviceCalibration[F[_]: MonadThrow](device: Device, clients: HttpClients[F]): F[DeviceCalibration] =
                 clients.providerClient(device.platform).map(_.fetchDeviceCalibration(device.platformId)).getOrElse {

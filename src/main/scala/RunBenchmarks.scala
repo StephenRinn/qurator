@@ -172,7 +172,7 @@ object RunBenchmarks extends IOApp.Simple {
                     for{
                         loaded <- WorkloadSpecs.loadedTasks
                         loadedFiltered = loaded.filter(t => t.qubits.value <= 5) // && t.qubits.value >= 21 )
-                        specs <- WorkloadSpecs.sample(n = 10, seed = 42L, T = loadedFiltered)
+                        specs <- WorkloadSpecs.sample(n = 100, seed = 42L, T = loadedFiltered)
                         (reg1, cl1, co1, sch1, cutting1) <- mkEnv(42L) //reinit so that the queue isn't tainted 
                         schedRun <- Logger[IO].info("Running Scheduler Benchmarks") *>
                             sch1.startRuntime.use(_ =>
@@ -208,7 +208,7 @@ object RunBenchmarks extends IOApp.Simple {
                         baselinePolicies = List(
                             SchedulerBenchmarkRunner.BaselinePolicy.LeastBusy,
                             SchedulerBenchmarkRunner.BaselinePolicy.HighestFidelity,
-                            SchedulerBenchmarkRunner.BaselinePolicy.ShortestQueueTargetFidelity(0.3),
+                            //SchedulerBenchmarkRunner.BaselinePolicy.ShortestQueueTargetFidelity(0.1),
                             SchedulerBenchmarkRunner.BaselinePolicy.QuantumListScheduling,
                             SchedulerBenchmarkRunner.BaselinePolicy.FairShare
                         )
