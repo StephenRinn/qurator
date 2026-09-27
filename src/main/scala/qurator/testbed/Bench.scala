@@ -1,29 +1,27 @@
 package qurator.testbed
 
-import cats._
-import cats.effect._
-import cats.syntax.all._
-import org.typelevel.log4cats.Logger
-
-import java.time.{Duration, LocalDateTime, Instant}
-
-import qurator.domain.Task._
-import qurator.domain.device._
+import cats.*
+import cats.effect.*
+import cats.syntax.all.*
+import org.typelevel.log4cats.{Logger, SelfAwareStructuredLogger}
+import java.time.{Duration, Instant, LocalDateTime}
+import qurator.domain.Task.*
+import qurator.domain.device.*
 import qurator.programs.DeviceEstimator
-import qurator.domain.calibration._
-import qurator.domain.circuit._
+import qurator.domain.calibration.*
+import qurator.domain.circuit.*
 import qurator.effects.GenUUID
 import qurator.domain.ID
 import qurator.testbed.FakeCompiler
 import qurator.modules.HttpClients
 import qurator.programs.Scheduler
-import qurator.domain.Braket._
-import qurator.domain.IBM._
+import qurator.domain.Braket.*
+import qurator.domain.IBM.*
 import qurator.clients.AzureQuantumClient
-import qurator.domain.Azure._
+import qurator.domain.Azure.*
 import qurator.clients.BraketClient
 import qurator.clients.IBMClient
-import qurator.testbed.IBMCalibrationInstances._
+import qurator.testbed.IBMCalibrationInstances.*
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import qurator.util.QuantumTaskLoader
 import qurator.util.Qasm3Parser
@@ -105,15 +103,15 @@ def submitJob(taskId: TaskId): IO[JobRecord] =
     now <- nowF
     existing <- jobsRef.get
 
-    val jobMillis: Long = msPerGate * 100L
-    val externalQueueMillis: Long = queueLen.toLong * jobMillis
-    val localQueueMillis: Long = localBacklogMillis(now, existing)
-    val totalQueueMillis: Long = externalQueueMillis + localQueueMillis
+    jobMillis: Long = msPerGate * 100L
+    externalQueueMillis: Long = queueLen.toLong * jobMillis
+    localQueueMillis: Long = localBacklogMillis(now, existing)
+    totalQueueMillis: Long = externalQueueMillis + localQueueMillis
 
-    val startAt: LocalDateTime  = now.plusNanos(totalQueueMillis * 1000000L)
-    val finishAt: LocalDateTime = startAt.plusNanos(jobMillis * 1000000L)
+    startAt: LocalDateTime  = now.plusNanos(totalQueueMillis * 1000000L)
+    finishAt: LocalDateTime = startAt.plusNanos(jobMillis * 1000000L)
 
-    val rec = JobRecord(
+    rec = JobRecord(
       taskId = taskId,
       deviceId = device.platformId,
       submittedAt = now,
@@ -131,9 +129,9 @@ def submitJob(taskId: TaskId): IO[JobRecord] =
         now <- nowF
         existing <- jobsRef.get
 
-        val jobMillis: Long = msPerGate * 100L
-        val externalQueueMillis: Long = queueLen.toLong * jobMillis
-        val localQueueMillis: Long = localBacklogMillis(now, existing)
+        jobMillis: Long = msPerGate * 100L
+        externalQueueMillis: Long = queueLen.toLong * jobMillis
+        localQueueMillis: Long = localBacklogMillis(now, existing)
     } yield externalQueueMillis + localQueueMillis
 
 
@@ -354,7 +352,7 @@ object BenchmarkDeviceRegistry {
             "ibm_torino" -> ibmTorinoCalibration
         )
 
-    implicit val logger = Slf4jLogger.getLogger[IO]
+    implicit val logger: SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
     
     def make(
@@ -733,7 +731,7 @@ object BenchmarkHttpClients{
 }
 
 object SchedulerBenchmarkRunner {
-    implicit val logger = Slf4jLogger.getLogger[IO]
+    implicit val logger: SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
     sealed trait BaselinePolicy {
         def name: String
     }

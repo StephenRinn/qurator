@@ -909,7 +909,7 @@ object Scheduler{
         private def startFetchingResults(): F[Unit] =
             Stream
                 .repeatEval(
-                    fetchAllInProgressJobResults.handleErrorWith { e =>
+                    fetchAllInProgressJobResults().handleErrorWith { e =>
                         Logger[F].error(e)("Result fetch loop failed unexpectedly; continuing")
                     }
                 )
@@ -921,7 +921,7 @@ object Scheduler{
             SchedulerDashboard.resource[F](dashboardConfig, dashboardState) *>
             Resource
                 .make {
-                    (Concurrent[F].start(startScheduling), Concurrent[F].start(startFetchingResults)).tupled
+                    (Concurrent[F].start(startScheduling()), Concurrent[F].start(startFetchingResults())).tupled
                 } { case (schedFib, fetchFib) =>
                     schedFib.cancel *> fetchFib.cancel
                 }
@@ -1718,7 +1718,7 @@ object Scheduler{
     }
 
 
-    private[qurator] def weightedMajorityDevice(
+    def weightedMajorityDevice(
         choices: List[(QuantumTask, Device, Double)]
     ): Option[Device] =
         choices

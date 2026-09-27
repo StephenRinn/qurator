@@ -1,64 +1,68 @@
 package qurator
 
 import weaver.SimpleIOSuite
-import cats.effect._
+import cats.effect.*
 import qurator.programs.Scheduler
 import qurator.service.DataPersistanceService
-import qurator.domain.DeviceQueueInformation._
+import qurator.domain.DeviceQueueInformation.*
 import java.time.LocalDateTime
 import qurator.modules.HttpClients
 import qurator.Types.AppConfig
-import qurator.Types._
+import qurator.Types.*
 import qurator.domain.IBM.IBMConfig
 import qurator.domain.Braket.BraketConfig
 import qurator.domain.Azure.AzureConfig
-import org.typelevel.log4cats._
+import org.typelevel.log4cats.*
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import eu.timepit.refined.types.string.NonEmptyString
-import eu.timepit.refined.cats._
-import derevo.cats._
-import cats.syntax.all._
-import ciris._
-import ciris.refined._
-import com.comcast.ip4s._
-import eu.timepit.refined.auto._
-import eu.timepit.refined.cats._
+import eu.timepit.refined.cats.*
+import cats.syntax.all.*
+import ciris.*
+import ciris.refined.*
+import com.comcast.ip4s.*
+import eu.timepit.refined.auto.*
+import eu.timepit.refined.cats.*
 import eu.timepit.refined.types.net.UserPortNumber
 import eu.timepit.refined.types.numeric.PosInt
 import ciris.Secret
 import org.http4s.client.Client
-import org.http4s.dsl.io._
-import org.http4s.implicits._
-import org.http4s.{ HttpRoutes, Response }
-import qurator.domain.circuit._
+import org.http4s.dsl.io.*
+import org.http4s.implicits.*
+import org.http4s.{HttpRoutes, Response}
+import qurator.domain.circuit.*
 import qurator.testbed.FakeCompiler
-import qurator.effects.TestBackground
+import qurator.effects.{Background, GenUUID, TestBackground}
 import cats.effect.std.Random
-import qurator.effects.GenUUID
 import qurator.domain.ID
-import qurator.domain.device._
-import qurator.domain.Task._
-import qurator.clients._
-import qurator.domain.IBM._
-import qurator.domain.calibration._
-import org.http4s.client._
-import org.http4s._ 
-import qurator.domain.device._
+import qurator.domain.device.*
+import qurator.domain.Task.*
+import qurator.clients.*
+import qurator.domain.IBM.*
+import qurator.domain.calibration.*
+import org.http4s.client.*
+import org.http4s.*
+import qurator.domain.device.*
 import scala.annotation.nowarn
-import qurator.domain.Braket._
-import qurator.domain.Azure._
+import qurator.domain.Braket.*
+import qurator.domain.Azure.*
 import qurator.testbed.FakeCompiler
 import qurator.domain.CutQC.CutQCConfig
-import qurator.domain.SubmittedJobData._
+import qurator.domain.SubmittedJobData.*
 import qurator.domain.{ProviderJobTiming, ProviderTaskStatus, QuantumJobResult}
 import qurator.util.CuttingStrategies
 
 @nowarn
 object SchedulerUtilitySuite extends SimpleIOSuite {
 
+  def NonEmptyString(in: String): NonEmptyString = in.asInstanceOf[NonEmptyString]
+
+  def UserPortNumber(in: Int): UserPortNumber = in.asInstanceOf[UserPortNumber]
+
+  def PosInt(in: Int): PosInt = in.asInstanceOf[PosInt]
+
   implicit val logger: Logger[IO] = Slf4jLogger.getLogger[IO]
-  implicit val bg = TestBackground.NoOp
+  implicit val bg: Background[IO] = TestBackground.NoOp
 
   val currentDevices = Map( 
     "ibm_boston" -> IBMDevice,
@@ -204,7 +208,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("weightedMajorityDevice gives larger subcircuits more weight") {
     for {
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
       a = Device("IBM", "small-majority", 20, t1 = 0f, t2 = 0f, gateSet = List.empty)
       b = Device("IBM", "large-minority", 20, t1 = 0f, t2 = 0f, gateSet = List.empty)
       t1 = QuantumTask(id1, Circuit(List.empty, 2), TaskQubits(2), TaskShots(1000), TaskDepth(1), Nil, Nil, LocalDateTime.now())
@@ -284,7 +289,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("classical task is not ready when one parent is missing") {
     for {
-      List(taskId, p1, p2) <- ids(3) 
+      ids <- ids(3)
+      List(taskId, p1, p2) = ids
       task = ClassicalTask(
         uuid = taskId,
         program = "do something",
@@ -301,7 +307,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("classical task is ready when all parent results exist") {
     for {
-      List(taskId, p1, p2) <- ids(3)
+      ids <- ids(3)
+      List(taskId, p1, p2) = ids
       task =  ClassicalTask(
         uuid = taskId,
         program = "do something",
@@ -340,7 +347,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("quantum task is not ready when a parent is missing") {
     for {
-      List(taskId, p1, p2) <- ids(3)
+      ids <- ids(3)
+      List(taskId, p1, p2) = ids
       task = QuantumTask(
         uuid = taskId,
         circuit = Circuit(List.empty, 5),
@@ -361,7 +369,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("quantum task is ready when all parent results exist") {
     for {
-      List(taskId, p1, p2, p3) <- ids(4)
+      ids <- ids(4)
+      List(taskId, p1, p2, p3) = ids
       task = QuantumTask(
         uuid = taskId,
         circuit = Circuit(List.empty, 5),
@@ -382,7 +391,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("synchronized group is ready only when every child is ready") {
     for {
-      List(sid, q1Id, q2Id, p1, p2, p3) <- ids(6)
+      ids <- ids(6)
+      List(sid, q1Id, q2Id, p1, p2, p3) = ids
 
       q1 = QuantumTask(
         uuid = q1Id,
@@ -451,7 +461,9 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("bucketByDepth sorts input by depth before bucketing") {
     for{
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
+
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -491,7 +503,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("bucketByDepth places all tasks in one bucket when all are within tolerance") {
     for{
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -530,7 +543,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("bucketByDepth splits tasks into multiple buckets when gaps exceed tolerance") {
     for{
-      List(id1, id2, id3, id4, id5) <- ids(5)
+      ids <- ids(5)
+      List(id1, id2, id3, id4, id5) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -590,7 +604,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("bucketByDepth includes a task exactly on the tolerance boundary") {
     // mean = 10, candidate = 12, relative diff = 2 / 10 = 0.2
     for{
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -620,7 +635,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("bucketByDepth excludes a task just outside the tolerance boundary") {
     // mean = 10, candidate = 13, relative diff = 3 / 10 = 0.3
     for{
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -653,7 +669,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
     // - 12 joins because it is checked against 10.5:
     //   |12 - 10.5| / 10.5 = ~0.142857 <= 0.20
     for{
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -690,7 +707,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("bucketByDepth preserves ascending order within each bucket and across buckets") {
     for{
-      List(id1, id2, id3, id4, id5) <- ids(5)
+      ids <- ids(5)
+      List(id1, id2, id3, id4, id5) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -749,7 +767,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("bucketByDepth with zero tolerance groups only equal depths") {
     for{
-      List(id1, id2, id3, id4, id5) <- ids(5)
+      ids <- ids(5)
+      List(id1, id2, id3, id4, id5) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -824,7 +843,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets returns a single singleton bin for one task") {
     for {
-      List(id1) <- ids(1)
+      ids <- ids(1)
+List(id1)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -848,7 +868,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets sorts by descending qubit count before packing") {
     for {
-      List(id1, id2, id3, id4) <- ids(4)
+      ids <- ids(4)
+      List(id1, id2, id3, id4) = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -903,7 +924,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets allows an exact fit up to capacity") {
     for {
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -937,7 +959,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets never exceeds capacity when each task individually fits") {
     for {
-      List(id1, id2, id3, id4) <- ids(4)
+      ids <- ids(4)
+List(id1, id2, id3, id4)  = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -996,7 +1019,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets respects maxTasksPerBin even when capacity allows more") {
     for {
-      List(id1, id2, id3, id4) <- ids(4)
+      ids <- ids(4)
+List(id1, id2, id3, id4)  = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -1050,7 +1074,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets with maxTasksPerBin = 1 puts every task in its own bin") {
     for {
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1094,7 +1119,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets uses first-fit among existing bins") {
     for {
-      List(id1, id2, id3, id4) <- ids(4)
+      ids <- ids(4)
+List(id1, id2, id3, id4) = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -1149,7 +1175,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets keeps an oversized task in its own bin rather than rejecting it") {
     for {
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -1196,7 +1223,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets with capacity 0 yields one bin per positive-size task") {
     for {
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -1243,7 +1271,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("assignToFinalBuckets preserves deterministic bin order in the final output") {
     for {
-      List(id1, id2, id3, id4, id5) <- ids(5)
+      ids <- ids(5)
+      List(id1, id2, id3, id4, id5) = ids
 
       t1 = QuantumTask(
         uuid = id1,
@@ -1325,7 +1354,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("buildGreedySynchronizedPlan fails when a task has no candidates") { // possibly need to avoid this case all together
     for {
-      List(id1) <- ids(1)
+      ids <- ids(1)
+List(id1)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1352,7 +1382,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("for the first task, objective ties and the higher-fidelity candidate wins even with a worse queue") {
     for {
-      List(id1) <- ids(1)
+      ids <- ids(1)
+List(id1)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1401,7 +1432,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("for the first task, if objective and fidelity tie, lower queueMillis wins") {
     for {
-      List(id1) <- ids(1)
+      ids <- ids(1)
+List(id1)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1450,7 +1482,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("for later tasks, lower objective beats higher fidelity") {
     for {
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1522,7 +1555,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("when objectives tie for a later task, higher fidelity wins") {
     for {
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1595,7 +1629,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
    test("when objective and fidelity tie for a later task, lower queueMillis wins") {
     for {
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1671,7 +1706,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("with no T1 budget, the lower raw objective wins") {
     for {
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1750,7 +1786,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("T1 budget penalty can change the chosen device") {
     for {
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -1833,7 +1870,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
 
   test("tasks assigned to the same device are kept in input order") {
     for {
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
       t1 = QuantumTask(
         uuid = id1,
         circuit = Circuit(List.empty, 5),
@@ -2007,7 +2045,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup returns the single task unchanged and does not call any client") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1) <- ids(1)
+      ids <- ids(1)
+List(id1)  = ids
 
       task = mkTask(
         id = id1,
@@ -2039,7 +2078,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup returns the original group unchanged when no device is feasible") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2, p1, p2) <- ids(4)
+      ids <- ids(4)
+      List(id1, id2, p1, p2) = ids
 
       tA = mkTask(
         id = id1,
@@ -2083,7 +2123,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup merges into a single task when the best estimated log fidelity meets the threshold") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2, p1, p2, p3) <- ids(5)
+      ids <- ids(5)
+      List(id1, id2, p1, p2, p3) = ids
 
       tA = mkTask(
         id = id1,
@@ -2137,7 +2178,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup returns the original group when the best estimated log fidelity is below the threshold") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       tA = mkTask(
         id = id1,
@@ -2183,7 +2225,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup evaluates all feasible devices and uses the maximum logPTotal across them") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       tA = mkTask(
         id = id1,
@@ -2234,7 +2277,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup only evaluates feasible devices") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       tA = mkTask(
         id = id1,
@@ -2284,7 +2328,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("flattenGroup propagates calibration fetch failure and stops before later feasible devices") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       tA = mkTask(
         id = id1,
@@ -2338,9 +2383,11 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
     ibmDevicesF: IO[BackendsResponseV2], //noticed I need this too late. Too lazy to patch up the tests now so using a new constructor
     ibmCalibrations: Map[String, IO[DeviceCalibration]]
   ): HttpClients[IO] = {
+    type Submission = CreateJobResponseV2
+    type Status = JobDetailsResponseV2
 
     val ibm = new IBMClient[IO] {
-      def fetchDeviceInformation(): IO[BackendsResponseV2] =
+      def fetchDeviceInformation: IO[BackendsResponseV2] =
         ibmDevicesF
 
       def fetchAvailableDevices: IO[List[Device]] =
@@ -2383,7 +2430,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         IO.pure(ProviderJobTiming(None, None))
       def fetchTaskResult(taskId: String, status: ProviderTaskStatus): IO[QuantumJobResult] =
         IO.pure(QuantumJobResult.unavailable(provider, taskId, None, "test client does not fetch Braket results"))
-      def fetchDeviceList(): IO[BraketDeviceListResponse] =
+      def fetchDeviceList: IO[BraketDeviceListResponse] =
         IO.pure(BraketDeviceListResponse(
           devices = List.empty,
           nextToken = None
@@ -2424,7 +2471,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks returns a single task unchanged") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1) <- ids(1)
+      ids <- ids(1)
+List(id1)  = ids
 
       t1 = mkTask(
         id = id1,
@@ -2461,7 +2509,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks returns tasks unchanged when no devices are available") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       t1 = mkTask(
         id = id1,
@@ -2505,7 +2554,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks merges a two-task group when threshold is low enough") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2, p1, p2, p3) <- ids(5)
+      ids <- ids(5)
+      List(id1, id2, p1, p2, p3) = ids
 
       t1 = mkTask(
         id = id1,
@@ -2558,7 +2608,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks keeps the original group when threshold is above achievable log fidelity") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       t1 = mkTask(
         id = id1,
@@ -2602,7 +2653,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks respects depth bucketing before merging") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
 
       // 10 and 11 are within 10% tolerance, 30 should split into another bucket.
       t1 = mkTask(
@@ -2658,7 +2710,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks respects capacity when splitting into final bins") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2, id3) <- ids(3)
+      ids <- ids(3)
+      List(id1, id2, id3) = ids
 
       t1 = mkTask(
         id = id1,
@@ -2714,7 +2767,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks respects maxTasksPerBin = 3") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2, id3, id4) <- ids(4)
+      ids <- ids(4)
+      List(id1, id2, id3, id4) = ids
 
       t1 = mkTask(
         id = id1,
@@ -2778,7 +2832,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks uses the maximum available device qubit count as capacity") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
       t1 = mkTask(
         id = id1,
         circuit = Circuit(List.empty, 6),
@@ -2828,7 +2883,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks uses the best feasible device log fidelity across devices") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+List(id1, id2)  = ids
 
       t1 = mkTask(
         id = id1,
@@ -2879,7 +2935,8 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   test("attemptToMergeSyncTasks propagates calibration fetch failure from the first merged group") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
-      List(id1, id2) <- ids(2)
+      ids <- ids(2)
+      List(id1, id2)  = ids
 
       t1 = mkTask(
         id = id1,
