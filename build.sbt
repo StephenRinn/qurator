@@ -71,8 +71,7 @@ lazy val root = project
     organization := "com.sinanspd",
     scalaVersion := scala3Version,
     scalacOptions ++= Seq(
-      "-Ykind-projector",
-      "-no-indent"
+      "-Ykind-projector"
     ),
     version := "0.1.20-SNAPSHOT",
     resolvers ++= Resolver.sonatypeOssRepos("snapshots"),

@@ -64,7 +64,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
   implicit val logger: Logger[IO] = Slf4jLogger.getLogger[IO]
   implicit val bg: Background[IO] = TestBackground.NoOp
 
-  val currentDevices = Map( 
+  val currentDevices = Map(
     "ibm_boston" -> IBMDevice,
     "ibm_kingston" -> IBMDevice,
     "ibm_pittsburgh" -> IBMDevice,
@@ -90,9 +90,9 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
       cache.get.flatMap { cached =>
           cached.get(device) match {
             case Some(dqi) =>
-              println(s"Found cache hit ${dqi.takeRight(1)}") 
+              println(s"Found cache hit ${dqi.takeRight(1)}")
               IO.pure(dqi)
-            case None => 
+            case None =>
               println(s"No cache hit for device $device, generating fake data...")
               Random.scalaUtilRandom[IO].flatMap { rng =>
                 for {
@@ -117,7 +117,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
                     case ((previousQueue, acc), i) =>
                       for {
                         delta <- rng.nextIntBounded(21)
-                        add <- rng.nextBoolean //add or subtract? 
+                        add <- rng.nextBoolean //add or subtract?
                         nextQueue = math.max(
                           0,
                           if (add) previousQueue + delta else previousQueue - delta
@@ -125,7 +125,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
                         id <- ID.make[IO, DeviceQueueInformationId]
                         entry = DeviceQueueInformation(
                           uuid        = id,
-                          name        = device, 
+                          name        = device,
                           provider    = currentDevices.getOrElse(device, IBMDevice),
                           queueLength = nextQueue,
                           waitTimeAvg = None,
@@ -168,7 +168,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         user = NonEmptyString("user"),
         password = Secret(NonEmptyString("password")),
         database = NonEmptyString("db"),
-        max = PosInt(10)  
+        max = PosInt(10)
      ),
      httpServerConfig = HttpServerConfig(
       host = Host.fromString("localhost").get,
@@ -234,7 +234,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
     }yield expect(l.length == 10080)
   }
 
- 
+
   test("test estimateQueueTime is within 10%"){
     val date = LocalDateTime.now()
     val service = fakeTestDataPersistance
@@ -251,7 +251,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         )
       tid <- ID.make[IO, TaskId]
       t = QuantumTask(
-        tid, 
+        tid,
         Circuit(List.empty, 5),
         TaskQubits(5),
         TaskShots(1000),
@@ -456,7 +456,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
       out = Scheduler.bucketByDepth(List(t), depthRelTol = 0.1)
     } yield {
        expect(depths(out) == List(List(7)))
-    } 
+    }
   }
 
   test("bucketByDepth sorts input by depth before bucketing") {
@@ -496,7 +496,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
       )
       out = Scheduler.bucketByDepth(List(t3, t1, t2), depthRelTol = 10.0)
     }yield {
-      expect(depths(out) == List(List(1, 2, 3)))          
+      expect(depths(out) == List(List(1, 2, 3)))
     }
   }
 
@@ -520,7 +520,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(11), 
+        depth = TaskDepth(11),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -530,7 +530,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(12), 
+        depth = TaskDepth(12),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -560,7 +560,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(11), 
+        depth = TaskDepth(11),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -570,7 +570,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(20), 
+        depth = TaskDepth(20),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -580,7 +580,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(21), 
+        depth = TaskDepth(21),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -590,7 +590,7 @@ object SchedulerUtilitySuite extends SimpleIOSuite {
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(40), 
+        depth = TaskDepth(40),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -621,7 +621,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(800),
-        depth = TaskDepth(12), 
+        depth = TaskDepth(12),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -652,7 +652,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(800),
-        depth = TaskDepth(13), 
+        depth = TaskDepth(13),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -686,7 +686,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(800),
-        depth = TaskDepth(11), 
+        depth = TaskDepth(11),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -696,7 +696,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(800),
-        depth = TaskDepth(12), 
+        depth = TaskDepth(12),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -724,7 +724,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(10), 
+        depth = TaskDepth(10),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -734,7 +734,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(40), 
+        depth = TaskDepth(40),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -744,7 +744,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(11), 
+        depth = TaskDepth(11),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -754,7 +754,7 @@ List(id1, id2)  = ids
         circuit = Circuit(List.empty, 5),
         qubits = TaskQubits(5),
         shots = TaskShots(1000),
-        depth = TaskDepth(20), 
+        depth = TaskDepth(20),
         parentTasks = List.empty,
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
@@ -1210,7 +1210,7 @@ List(id1, id2, id3, id4) = ids
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
       )
-    
+
       out = Scheduler.assignToFinalBuckets(
         bucket = List(t1, t2, t3),
         capacity = 10,
@@ -1366,7 +1366,7 @@ List(id1)  = ids
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
       )
-        
+
       attempt <- Scheduler
         .buildGreedySynchronizedPlan[IO](
           orderedTasks = List(t1),
@@ -1444,7 +1444,7 @@ List(id1)  = ids
         childTasks = List.empty,
         createdAt = LocalDateTime.now()
       )
-      
+
 
       a = Device(
         platform = "IBM",
@@ -1948,7 +1948,7 @@ List(id1, id2)  = ids
       def getSession(id: String): IO[SessionResponse] = ???
       def updateSession(id: String, r: UpdateSessionRequest): IO[Unit] = ???
       def closeSession(id: String): IO[Unit] = ???
-      def submitJob(r: SubmitJobRequestV2): IO[CreateJobResponseV2] = ??? 
+      def submitJob(r: SubmitJobRequestV2): IO[CreateJobResponseV2] = ???
       def listJobDetails(id: String): IO[JobDetailsResponseV2] = ???
       def getJobMetrics(id: String): IO[JobMetricsResponse] = ???
       def getJobResults(id: String): IO[String] =
@@ -1978,7 +1978,7 @@ List(id1, id2)  = ids
       def fetchAvailableDevices: IO[List[Device]] =
         BraketClient.fetchAvailableDevices(fetchDeviceList, fetchDeviceDetails)
       def fetchDeviceDetails(ids: List[String]): IO[List[BraketDeviceDetailsResponse]] = ???
-      def submitBraketOpenQasmTask(r: BraketCreateQuantumTaskRequest, qasmSource:   String): IO[BraketCreateQuantumTaskResponse] = ??? 
+      def submitBraketOpenQasmTask(r: BraketCreateQuantumTaskRequest, qasmSource:   String): IO[BraketCreateQuantumTaskResponse] = ???
       def getQuantumTask(taskId: String) : IO[BraketQuantumTaskResponse] = ???
       def fetchJobTiming(taskId: String, status: ProviderTaskStatus): IO[ProviderJobTiming] =
         IO.pure(ProviderJobTiming(None, None))
@@ -1994,7 +1994,7 @@ List(id1, id2)  = ids
   private val t0 = LocalDateTime.of(2026, 1, 1, 10, 0, 0)
   private val t1 = LocalDateTime.of(2026, 1, 1, 11, 0, 0)
 
-  private def mkTask( //probably should use this in the previous tests 
+  private def mkTask( //probably should use this in the previous tests
     id: TaskId,
     circuit: Circuit,
     qubits: Int,
@@ -2024,7 +2024,7 @@ List(id1, id2)  = ids
       t2 = 0f,
       gateSet = List.empty
     )
-  
+
   private def mkIonQCalibration(avg1qFidelityPct: Double): IonQCalibration =
     IonQCalibration(
       avg1qFidelityPct = avg1qFidelityPct,
@@ -2041,7 +2041,7 @@ List(id1, id2)  = ids
     FakeCompiler[IO](compiled = Nil)
 
   private final case class FetchState(fetchOrder: List[String] = Nil)
-  
+
   test("flattenGroup returns the single task unchanged and does not call any client") {
     for {
       state <- Ref.of[IO, FetchState](FetchState())
@@ -2408,7 +2408,7 @@ List(id1, id2)  = ids
       def getSession(id: String): IO[SessionResponse] = ???
       def updateSession(id: String, r: UpdateSessionRequest): IO[Unit] = ???
       def closeSession(id: String): IO[Unit] = ???
-      def submitJob(r: SubmitJobRequestV2): IO[CreateJobResponseV2] = ??? 
+      def submitJob(r: SubmitJobRequestV2): IO[CreateJobResponseV2] = ???
       def listJobDetails(id: String): IO[JobDetailsResponseV2] = ???
       def getJobMetrics(id: String): IO[JobMetricsResponse] = ???
       def getJobResults(id: String): IO[String] =
@@ -2422,9 +2422,9 @@ List(id1, id2)  = ids
     val braket = new BraketClient[IO] {
       def fetchAvailableDevices: IO[List[Device]] =
         BraketClient.fetchAvailableDevices(fetchDeviceList, fetchDeviceDetails)
-      def fetchDeviceDetails(ids: List[String]): IO[List[BraketDeviceDetailsResponse]] = 
+      def fetchDeviceDetails(ids: List[String]): IO[List[BraketDeviceDetailsResponse]] =
         IO.pure(List.empty)
-      def submitBraketOpenQasmTask(r: BraketCreateQuantumTaskRequest, qasmSource:   String): IO[BraketCreateQuantumTaskResponse] = ??? 
+      def submitBraketOpenQasmTask(r: BraketCreateQuantumTaskRequest, qasmSource:   String): IO[BraketCreateQuantumTaskResponse] = ???
       def getQuantumTask(taskId: String) : IO[BraketQuantumTaskResponse] = ???
       def fetchJobTiming(taskId: String, status: ProviderTaskStatus): IO[ProviderJobTiming] =
         IO.pure(ProviderJobTiming(None, None))
@@ -2461,7 +2461,7 @@ List(id1, id2)  = ids
       status = IBMBackendDeviceStatus(name = "online", reason = None),
       qubits = Some(qubits),
       queue_length = 0,
-      is_simulator = None, 
+      is_simulator = None,
       clops = None,
       processor_type = None,
       performance_metrics = None,
