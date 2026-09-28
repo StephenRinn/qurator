@@ -70,9 +70,6 @@ lazy val root = project
     name := "qure",
     organization := "com.sinanspd",
     scalaVersion := scala3Version,
-    scalacOptions ++= Seq(
-      "-Ykind-projector"
-    ),
     version := "0.1.20-SNAPSHOT",
     resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
     libraryDependencies ++= Seq(

@@ -100,10 +100,10 @@ object SyncBench {
     def name: String
   }
 
-private def buildSubmittedTaskMetricsForGroup(
-  assignmentsInOrder: List[(TaskId, String, QuantumTaskSpec)],
-  registry: BenchmarkDeviceRegistry
-): IO[List[SyncTaskMetric]] = {
+  private def buildSubmittedTaskMetricsForGroup(
+      assignmentsInOrder: List[(TaskId, String, QuantumTaskSpec)],
+      registry: BenchmarkDeviceRegistry
+  ): IO[List[SyncTaskMetric]] = {
 
   def estimateRunMillis(device: Device, spec: QuantumTaskSpec): IO[Long] = {
     val rawCal = registry.calibration(device.platformId)
@@ -149,11 +149,11 @@ private def buildSubmittedTaskMetricsForGroup(
   }
 }
 
-private def buildGroupMetric(
-    groupIndex: Int,
-    coherenceBudgetMillis: Long,
-    taskMetrics: List[SyncTaskMetric]
-): SyncGroupMetric = {
+  private def buildGroupMetric(
+      groupIndex: Int,
+      coherenceBudgetMillis: Long,
+      taskMetrics: List[SyncTaskMetric]
+  ): SyncGroupMetric = {
     val starts = taskMetrics.map(_.startMillis)
     val finishes = taskMetrics.map(_.finishMillis)
 
@@ -258,11 +258,11 @@ private def buildGroupMetric(
     }
   }
 
-private def waitUntilAllCompleted(
-    completedRef: Ref[IO, Map[TaskId, QuantumResult]],
-    expectedIds: Set[TaskId],
-    pollEvery: scala.concurrent.duration.FiniteDuration
-): IO[List[SyncSubmittedQuantum]] = {
+  private def waitUntilAllCompleted(
+      completedRef: Ref[IO, Map[TaskId, QuantumResult]],
+      expectedIds: Set[TaskId],
+      pollEvery: scala.concurrent.duration.FiniteDuration
+  ): IO[List[SyncSubmittedQuantum]] = {
 
     def loop: IO[List[SyncSubmittedQuantum]] =
         completedRef.get.flatMap { seen =>
@@ -338,7 +338,7 @@ private def waitUntilAllCompleted(
       submittedById: Map[TaskId, String] =
         submitted.map(s => s.taskId -> s.deviceId).toMap
 
-     groupMetrics <- submittedGroups.zip(groups).traverse { case (sg, group) =>
+      groupMetrics <- submittedGroups.zip(groups).traverse { case (sg, group) =>
         val submittedById: Map[TaskId, String] =
             submitted.map(s => s.taskId -> s.deviceId).toMap
 

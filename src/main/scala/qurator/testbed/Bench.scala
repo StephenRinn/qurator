@@ -46,49 +46,13 @@ final case class QuantumTaskSpec(
 object WorkloadSpecs {
   //For test only, remove later
   val defaultT: Vector[QuantumTaskSpec] =
-    Vector(
-      QuantumTaskSpec(
-        Circuit(List(X(0), Measure(0)), 1),
-        TaskQubits(1),
-        TaskShots(1000),
-        TaskDepth(1)
-      ),
-      QuantumTaskSpec(
-        Circuit(List(H(0), Measure(0)), 1),
-        TaskQubits(1),
-        TaskShots(1000),
-        TaskDepth(1)
-      ),
-      QuantumTaskSpec(
-        Circuit(List(X(0), H(0), Measure(0)), 1),
-        TaskQubits(1),
-        TaskShots(2000),
-        TaskDepth(2)
-      ),
-      QuantumTaskSpec(
-        Circuit(List(CX(0, 1), Measure(1)), 2),
-        TaskQubits(2),
-        TaskShots(1500),
-        TaskDepth(1)
-      ),
-      QuantumTaskSpec(
-        Circuit(List(H(0), CX(0, 1), Measure(0)), 2),
-        TaskQubits(2),
-        TaskShots(1500),
-        TaskDepth(2)
-      ),
-      QuantumTaskSpec(
-        Circuit(List(X(0), X(1), CZ(0, 1), Measure(0)), 2),
-        TaskQubits(2),
-        TaskShots(3000),
-        TaskDepth(3)
-      ),
-      QuantumTaskSpec(
-        Circuit(List(X(0), H(1), Swap(0, 1), Measure(0)), 2),
-        TaskQubits(2),
-        TaskShots(2500),
-        TaskDepth(3)
-      )
+    Vector(QuantumTaskSpec(Circuit(List(X(0), Measure(0)), 1), TaskQubits(1), TaskShots(1000), TaskDepth(1)),
+      QuantumTaskSpec(Circuit(List(H(0), Measure(0)), 1), TaskQubits(1), TaskShots(1000), TaskDepth(1)),
+      QuantumTaskSpec(Circuit(List(X(0), H(0), Measure(0)), 1), TaskQubits(1), TaskShots(2000), TaskDepth(2)),
+      QuantumTaskSpec(Circuit(List(CX(0, 1), Measure(1)), 2), TaskQubits(2), TaskShots(1500), TaskDepth(1)),
+      QuantumTaskSpec(Circuit(List(H(0), CX(0, 1), Measure(0)), 2), TaskQubits(2), TaskShots(1500), TaskDepth(2)),
+      QuantumTaskSpec(Circuit(List(X(0), X(1), CZ(0, 1), Measure(0)), 2), TaskQubits(2), TaskShots(3000), TaskDepth(3)),
+      QuantumTaskSpec(Circuit(List(X(0), H(1), Swap(0, 1), Measure(0)), 2), TaskQubits(2), TaskShots(2500), TaskDepth(3))
     )
 
   val loadedTasks: IO[Vector[QuantumTaskSpec]] =

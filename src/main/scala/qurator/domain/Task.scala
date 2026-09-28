@@ -33,10 +33,8 @@ object Task{
       def value: UUID = id
     }
 
-    given Eq[TaskId] = summon[Eq[UUID]]
-
-    given Show[TaskId] = summon[Show[UUID]]
-
+    given Eq[TaskId] = Eq.fromUniversalEquals
+    given Show[TaskId] = Show.fromToString
     given IsUUID[TaskId] = IsUUID.opaqueUUID[TaskId]
   }
 
@@ -59,7 +57,7 @@ object Task{
     case class TaskDepth(value: Int)
 
     sealed trait Task{
-        val uuid : TaskId;
+        val uuid : TaskId
     }
     
     case class ClassicalTask(

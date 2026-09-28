@@ -19,10 +19,8 @@ object SubmittedJobData {
             def value: UUID = id
         }
 
-        given Eq[SubmittedJobDataId] = summon[Eq[SubmittedJobDataId]]
-
-        given Show[SubmittedJobDataId] = summon[Show[SubmittedJobDataId]]
-
+        given Eq[SubmittedJobDataId] = Eq.fromUniversalEquals
+        given Show[SubmittedJobDataId] = Show.fromToString
         given IsUUID[SubmittedJobDataId] = IsUUID.opaqueUUID[SubmittedJobDataId]
     }
   

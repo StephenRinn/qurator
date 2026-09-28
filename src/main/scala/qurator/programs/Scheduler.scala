@@ -1783,11 +1783,11 @@ object Scheduler{
   }
 
   private[qurator] def attemptToMergeSyncTasks[F[_] : MonadThrow : GenUUID : Logger](
-                                                                                      tasks: List[QuantumTask],
-                                                                                      clients: HttpClients[F],
-                                                                                      compiler: FakeCompiler[F],
-                                                                                      targetEstimatedFidelity: Double
-                                                                                    ): F[List[QuantumTask]] =
+      tasks: List[QuantumTask],
+      clients: HttpClients[F],
+      compiler: FakeCompiler[F],
+      targetEstimatedFidelity: Double
+  ): F[List[QuantumTask]] =
     for {
       devices <- getAvailableDevices[F](clients)
       maxQubits = devices.map(_.qubits).maxOption.getOrElse(0)
@@ -1816,10 +1816,10 @@ object Scheduler{
     } yield quantumDevices ++ azure
 
   private[qurator] def assignToFinalBuckets(
-                                             bucket: List[QuantumTask],
-                                             capacity: Int,
-                                             maxTasksPerBin: Int
-                                           ): List[List[QuantumTask]] = {
+      bucket: List[QuantumTask],
+      capacity: Int,
+      maxTasksPerBin: Int
+  ): List[List[QuantumTask]] = {
     final case class Bin(tasks: List[QuantumTask], used: Int) {
       def canFit(t: QuantumTask): Boolean =
         (used + t.qubits.value <= capacity) && (tasks.size < maxTasksPerBin)
@@ -1842,12 +1842,12 @@ object Scheduler{
   }
 
   private[qurator] def flattenGroup[F[_] : MonadThrow : GenUUID : Logger](
-                                                                           group: List[QuantumTask],
-                                                                           devices: List[Device],
-                                                                           clients: HttpClients[F],
-                                                                           compiler: FakeCompiler[F],
-                                                                           targetEstimatedFidelity: Double
-                                                                         ): F[List[QuantumTask]] = {
+      group: List[QuantumTask],
+      devices: List[Device],
+      clients: HttpClients[F],
+      compiler: FakeCompiler[F],
+      targetEstimatedFidelity: Double
+  ): F[List[QuantumTask]] = {
     println("Starting Flatten Group")
     println(s"Group Size ${group.length}")
     group match {
@@ -1889,11 +1889,11 @@ object Scheduler{
   }
 
   private[qurator] def estimateFidelity[F[_] : MonadThrow](
-                                                            device: Device,
-                                                            task: Circuit,
-                                                            clients: HttpClients[F],
-                                                            compiler: FakeCompiler[F]
-                                                          ): F[FidelityEstimate] =
+      device: Device,
+      task: Circuit,
+      clients: HttpClients[F],
+      compiler: FakeCompiler[F]
+  ): F[FidelityEstimate] =
     for {
       compiled <- compiler.compileCircuitFor(device, task)
       deviceCal <- Scheduler.fetchDeviceCalibration(device, clients)
@@ -1917,17 +1917,17 @@ object Scheduler{
                                                                                             ): F[SynchronizedPlan] = {
 
     final case class Placement(
-                                task: QuantumTask,
-                                device: Device,
-                                startMillis: Long,
-                                finishMillis: Long
-                              )
+        task: QuantumTask,
+        device: Device,
+        startMillis: Long,
+        finishMillis: Long
+    )
 
     final case class Acc(
-                          assignments: Map[Device, List[QuantumTask]],
-                          runtimeSum: Map[Device, Long],
-                          placements: List[Placement]
-                        )
+        assignments: Map[Device, List[QuantumTask]],
+        runtimeSum: Map[Device, Long],
+        placements: List[Placement]
+    )
 
     def taskStartFinish(device: Device, cand: CandidateDevice, acc: Acc): (Long, Long) = {
       val prevRuntimeOnDevice = acc.runtimeSum.getOrElse(device, 0L)

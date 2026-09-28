@@ -5,16 +5,9 @@ import io.circe.generic.semiauto.{deriveEncoder, deriveDecoder}
 import cats.derived.*
 import cats.Show
 import cats.Eq
-import qurator.optics.{IsUUID, uuid}
+import qurator.optics.IsUUID
 import java.util.UUID
 import java.time.LocalDateTime
-import ciris.*
-import ciris.refined.*
-import com.comcast.ip4s.{Host, Port}
-import eu.timepit.refined.cats.*
-import eu.timepit.refined.types.net.UserPortNumber
-import eu.timepit.refined.types.numeric.PosInt
-import eu.timepit.refined.types.string.NonEmptyString
 
 object DeviceQueueInformation {
 
@@ -27,26 +20,24 @@ object DeviceQueueInformation {
             def value: UUID = id
         }
 
-        given Eq[DeviceQueueInformationId] = summon[Eq[UUID]]
-        given Show[DeviceQueueInformationId] = summon[Show[UUID]]
+        given Eq[DeviceQueueInformationId] = Eq.fromUniversalEquals
+        given Show[DeviceQueueInformationId] = Show.fromToString
         given IsUUID[DeviceQueueInformationId] = IsUUID.opaqueUUID[DeviceQueueInformationId]
-
-        // Encoders/Decoders for opaque type
-        given Encoder[DeviceQueueInformationId] = Encoder[UUID]
-        given Decoder[DeviceQueueInformationId] = Decoder[UUID]
+        given Encoder[DeviceQueueInformationId] = Encoder.encodeUUID
+        given Decoder[DeviceQueueInformationId] = Decoder.decodeUUID
     }
 
     case class DeviceQueueInformation(
-                                       uuid: DeviceQueueInformationId,
-                                       name: String,
-                                       provider: DeviceProvider,
-                                       queueLength: Int,
-                                       waitTimeAvg: Option[Int],
-                                       waitTimep50: Option[Int],
-                                       waitTimep95: Option[Int],
-                                       queueType: QueueType,
-                                       createdAt: LocalDateTime
-                                     ) derives Eq
+       uuid: DeviceQueueInformationId,
+       name: String,
+       provider: DeviceProvider,
+       queueLength: Int,
+       waitTimeAvg: Option[Int],
+       waitTimep50: Option[Int],
+       waitTimep95: Option[Int],
+       queueType: QueueType,
+       createdAt: LocalDateTime
+   ) derives Eq
 
     object DeviceQueueInformation {
         given Encoder[DeviceQueueInformation] = deriveEncoder
@@ -54,14 +45,14 @@ object DeviceQueueInformation {
     }
 
     case class DeviceQueueInformationCreate(
-                                             name: String,
-                                             provider: DeviceProvider,
-                                             queueLength: Int,
-                                             waitTimeAvg: Option[Int],
-                                             waitTimep50: Option[Int],
-                                             waitTimep95: Option[Int],
-                                             queueType: QueueType,
-                                           ) derives Eq, Show
+       name: String,
+       provider: DeviceProvider,
+       queueLength: Int,
+       waitTimeAvg: Option[Int],
+       waitTimep50: Option[Int],
+       waitTimep95: Option[Int],
+       queueType: QueueType,
+    ) derives Eq, Show
 
     object DeviceQueueInformationCreate {
         given Encoder[DeviceQueueInformationCreate] = deriveEncoder

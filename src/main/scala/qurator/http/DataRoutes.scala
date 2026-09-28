@@ -15,8 +15,8 @@ import eu.timepit.refined.auto.*
 import java.util.UUID
 
 final case class DataRoutes[F[_]: JsonDecoder: MonadThrow](
-                                                            dp: DataPersistanceService[F]
-                                                          ) extends Http4sDsl[F] {
+    dp: DataPersistanceService[F]
+) extends Http4sDsl[F] {
 
   private[http] val prefixPath = "/queue"
 

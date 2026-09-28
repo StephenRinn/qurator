@@ -1,15 +1,9 @@
 package qurator.domain
 
 import ciris.*
-import ciris.refined.*
-import io.circe.generic.auto.*
 import cats.derived.*
 import cats.Show
 import cats.Eq
-import com.comcast.ip4s.{Host, Port}
-import eu.timepit.refined.cats.*
-import eu.timepit.refined.types.net.UserPortNumber
-import eu.timepit.refined.types.numeric.PosInt
 import eu.timepit.refined.types.string.NonEmptyString
 import qurator.domain.DeviceQueueInformation.*
 import qurator.domain.device.Device
